@@ -1,30 +1,33 @@
 /**
- * mzd serve command - Start the MCP server
+ * mzd serve command - Start the local agent daemon
  */
 
 import { Command } from "commander";
 import { loadConfig, getWorkspace } from "../../config/loader.js";
 import { createRunContext } from "../../runtime/context.js";
 import { createLogger } from "../../runtime/logger.js";
-import { MzdServer } from "../../server/mcp-server.js";
+import { LocalAgentDaemon } from "../../server/daemon.js";
+import { getOrCreateToken, regenerateToken, getTokenPath } from "../../auth/token.js";
 
 export interface ServeOptions {
   workspace?: string;
   host?: string;
   port?: number;
-  transport?: "stdio" | "http";
   verbose?: boolean;
+  newToken?: boolean;
+  showToken?: boolean;
 }
 
 export function registerServeCommand(program: Command): void {
   program
     .command("serve")
-    .description("Start the MCP server")
+    .description("Start the local agent daemon")
     .option("-w, --workspace <name>", "Workspace to serve")
-    .option("--host <host>", "Host to bind to")
-    .option("-p, --port <port>", "Port to listen on", parseInt)
-    .option("-t, --transport <type>", "Transport type (stdio, http)", "stdio")
+    .option("--host <host>", "Host to bind to (default: 127.0.0.1)")
+    .option("-p, --port <port>", "Port to listen on (default: 3847)", parseInt)
     .option("-v, --verbose", "Enable verbose logging")
+    .option("--new-token", "Generate a new auth token")
+    .option("--show-token", "Display the auth token on startup")
     .action(async (opts: ServeOptions) => {
       try {
         const config = await loadConfig();
@@ -52,6 +55,9 @@ export function registerServeCommand(program: Command): void {
 
         const { workspace } = workspaceResult;
 
+        // Get or create auth token
+        const authToken = opts.newToken ? await regenerateToken() : await getOrCreateToken();
+
         // Create run context
         const ctx = createRunContext(config, workspace, {
           traceMode: opts.verbose,
@@ -62,26 +68,48 @@ export function registerServeCommand(program: Command): void {
           verbose: opts.verbose,
         });
 
-        logger.info(`Starting MCP server for workspace: ${workspace.name}`, {
-          path: workspace.path,
-          tier: workspace.tier,
-        });
-
         // Merge server options
         const serverConfig = {
           ...config.server,
           ...(opts.host && { host: opts.host }),
           ...(opts.port && { port: opts.port }),
-          ...(opts.transport && { transport: opts.transport }),
+          transport: "http" as const, // Daemon uses WebSocket over HTTP
         };
 
-        // Create and start server
-        const server = new MzdServer(ctx, logger, serverConfig);
+        // Display connection info
+        console.log("");
+        console.log("Local Agent Daemon");
+        console.log("==================");
+        console.log(`Workspace:   ${workspace.name}`);
+        console.log(`Path:        ${workspace.path}`);
+        console.log(`Tier:        ${workspace.tier}`);
+        console.log(`Host:        ${serverConfig.host}`);
+        console.log(`Port:        ${serverConfig.port}`);
+        console.log(`Token file:  ${getTokenPath()}`);
+
+        if (opts.showToken) {
+          console.log(`Auth token:  ${authToken}`);
+        } else {
+          console.log(`Auth token:  (use --show-token to display)`);
+        }
+
+        console.log("");
+        console.log("Connect with:");
+        console.log(`  ws://${serverConfig.host}:${serverConfig.port}`);
+        console.log("");
+
+        logger.info(`Starting local agent daemon for workspace: ${workspace.name}`, {
+          path: workspace.path,
+          tier: workspace.tier,
+        });
+
+        // Create and start daemon
+        const daemon = new LocalAgentDaemon(ctx, logger, serverConfig, config, authToken);
 
         // Handle shutdown
         const shutdown = async () => {
-          logger.info("Shutting down...");
-          await server.stop();
+          console.log("\nShutting down...");
+          await daemon.stop();
           await logger.flush();
           process.exit(0);
         };
@@ -89,10 +117,12 @@ export function registerServeCommand(program: Command): void {
         process.on("SIGINT", shutdown);
         process.on("SIGTERM", shutdown);
 
-        await server.start();
+        await daemon.start();
+
+        console.log("Daemon running. Press Ctrl+C to stop.");
       } catch (error) {
         console.error(
-          `Failed to start server: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`,
         );
         if (process.env.DEBUG) {
           console.error(error);
