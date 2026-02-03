@@ -10,6 +10,7 @@ import { registerToolCommand } from "./commands/tool.js";
 import { registerRunsCommand } from "./commands/runs.js";
 import { registerWorkspaceCommand } from "./commands/workspace.js";
 import { registerConfigCommand } from "./commands/config.js";
+import { registerClientCommand } from "./commands/client.js";
 
 /**
  * Build the mzd CLI program
@@ -30,6 +31,7 @@ export function buildMzdProgram(): Command {
   registerRunsCommand(program);
   registerWorkspaceCommand(program);
   registerConfigCommand(program);
+  registerClientCommand(program);
 
   return program;
 }

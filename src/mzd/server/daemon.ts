@@ -470,6 +470,10 @@ export class LocalAgentDaemon {
       this.httpServer.listen(this.config.port, this.config.host, () => {
         this.running = true;
 
+        // Get actual port (may differ from config if port 0 was used)
+        const address = this.httpServer!.address();
+        const actualPort = typeof address === "object" && address ? address.port : this.config.port;
+
         // Start heartbeat
         this.tickInterval = setInterval(() => {
           this.broadcastEvent("tick", { timestamp: Date.now() });
@@ -477,14 +481,14 @@ export class LocalAgentDaemon {
 
         this.logger.info("Local agent daemon started", {
           host: this.config.host,
-          port: this.config.port,
+          port: actualPort,
           workspace: this.ctx.workspace.name,
           tier: this.ctx.workspace.tier,
         });
 
         resolve({
           host: this.config.host,
-          port: this.config.port,
+          port: actualPort,
         });
       });
     });
