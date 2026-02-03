@@ -8,6 +8,7 @@
  * - Provides transparent observability
  * - Enforces workspace scoping + approval gates
  * - Uses token-based authentication
+ * - Orchestrates tasks with safety, cost control, and traceability
  */
 
 // CLI
@@ -32,6 +33,34 @@ export {
   regenerateToken,
   getTokenPath,
 } from "./auth/token.js";
+
+// Orchestrator
+export {
+  // Core
+  type OrchestratorLimits,
+  type OrchestratorContext,
+  type StructuredOutput,
+  type Checkpoint,
+  type Evidence,
+  type ModelMode,
+  DEFAULT_LIMITS,
+  createOrchestratorContext,
+  createCheckpoint,
+  buildStructuredOutput,
+  // Agents
+  type AgentType,
+  type AgentTask,
+  type AgentResult,
+  registerAgent,
+  runAgent,
+  runAgentsParallel,
+  // Runner
+  type Task,
+  type TaskResult,
+  TaskRunner,
+  createTaskRunner,
+  isCheckpoint,
+} from "./orchestrator/index.js";
 
 // Config types
 export type { MzdConfig, WorkspaceConfig, PermissionTier } from "./config/types.js";
